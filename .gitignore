@@ -1,0 +1,10 @@
+# Node/OS
+node_modules/
+npm-debug.log*
+.DS_Store
+
+# 環境ファイル（絶対に上げない）
+.env
+
+# (注意) 今回は build/ をコミットするので除外しない
+# build/
