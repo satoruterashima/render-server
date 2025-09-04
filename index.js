@@ -184,3 +184,31 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server started on :${PORT}`);
 });
+
+// 失敗時の詳細を吐くよう gasGet を少しだけ強化
+async function gasGet(params) {
+  const ts = Math.floor(Date.now() / 1000);
+  const sig = signPayload(params.action, ts, params.userId || "");
+  const url = new URL(process.env.GAS_URL);
+  Object.entries({ ...params, ts, sig }).forEach(([k, v]) => {
+    if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
+  });
+  const r = await fetch(url.toString(), { method: "GET" });
+  if (!r.ok) {
+    const text = await r.text().catch(() => "");
+    console.error("GAS GET failed:", r.status, text);
+    throw new Error(`GAS GET ${params.action} ${r.status}`);
+  }
+  return r.json();
+}
+
+// /api/categories ルート
+app.get("/api/categories", async (_req, res) => {
+  try {
+    const data = await gasGet({ action: "getCategories" });
+    res.json(data);
+  } catch (e) {
+    console.error("getCategories upstream error:", e);
+    res.status(502).json({ error: "getCategories failed" });
+  }
+});
