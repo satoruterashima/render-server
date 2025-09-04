@@ -8,3 +8,11 @@ npm-debug.log*
 
 # (注意) 今回は build/ をコミットするので除外しない
 # build/
+
+.env
+
+.env.local.backup
+
+.env
+
+.env.local.backup
