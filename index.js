@@ -20,15 +20,14 @@ const __dirname = path.dirname(__filename);
 // ================= HMAC 署名（GAS連携） =================
 function signPayload(action, ts, userId = "") {
   const base = `${action}.${ts}.${userId}`;
-  const h = crypto.createHmac("sha256", process.env.1hvXbao2T13tQKFfwoBJsI1Yj5H-95OpMwsTxl07Rfq8/ || "");
-  h.update(base);
+  const h = crypto.createHmac("sha256", process.env.GAS_SHARED_SECRET || "");
   return h.digest("hex");
 }
 
 async function gasGet(params) {
   const ts = Math.floor(Date.now() / 1000);
   const sig = signPayload(params.action, ts, params.userId || "");
-  const url = new URL(process.env.https://script.google.com/macros/s/AKfycbxVKW9-Exb1_28JaTaDWDaR89c5al_RuP2xB2n3xmE7bkXa1XZbBt72oIztuUokFYu6Hg/exec);
+  const url = new URL(process.env.GAS_URL);
   Object.entries({ ...params, ts, sig }).forEach(([k, v]) => {
     if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
   });
