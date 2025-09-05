@@ -113,3 +113,55 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server started on :${PORT}`);
 });
+
+// ===== /api/order: フロント→GAS placeOrder を中継 =====
+app.post("/api/order", async (req, res) => {
+  try {
+    const body = req.body || {};
+    // 最低限のバリデーション
+    if (!Array.isArray(body.items) || body.items.length === 0) {
+      return res.status(400).json({ ok:false, error:"items is empty" });
+    }
+
+    // 合計計算（サーバ側でもチェック）
+    const total = body.items.reduce((s, it) => s + Number(it.price||0) * Number(it.qty||0), 0);
+
+    // GAS に渡すペイロード
+    const payload = {
+      action: "placeOrder",
+      userId: body.liffUserId || "",  // LIFFの userId（なくても可）
+      items: body.items,               // [{name, price, qty, major, mid}]
+      note: body.note || "",
+      total
+    };
+
+    // ---- GAS リクエスト ----
+    const url = new URL(GAS_URL);
+    const r = await fetch(url.toString(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const text = await r.text().catch(() => "");
+    if (!r.ok) {
+      console.error("GAS POST placeOrder failed:", r.status, text.slice(0,200));
+      return res.status(502).json({ ok:false, error:`upstream ${r.status}` });
+    }
+
+    let j;
+    try { j = JSON.parse(text); } catch (e) {
+      console.error("GAS JSON parse error:", e, text.slice(0,200));
+      return res.status(502).json({ ok:false, error:"invalid upstream json" });
+    }
+    if (!j || j.ok !== true) {
+      console.error("GAS returned not ok:", j);
+      return res.status(502).json({ ok:false, error:"upstream not ok", detail:j });
+    }
+
+    return res.json({ ok:true, orderId: j.orderId, total });
+  } catch (e) {
+    console.error("order failed:", e);
+    return res.status(500).json({ ok:false, error:String(e) });
+  }
+});
