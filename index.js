@@ -1,6 +1,4 @@
-// render-server/index.js
-
-import express from "express";
+﻿import express from "express";
 import fetch from "node-fetch";
 import crypto from "crypto";
 import dotenv from "dotenv";
@@ -21,7 +19,7 @@ const __dirname = path.dirname(__filename);
 function signPayload(action, ts, userId = "") {
   const base = `${action}.${ts}.${userId}`;
   const h = crypto.createHmac("sha256", process.env.GAS_SHARED_SECRET || "");
-  h.update(base); // ←必須
+  h.update(base);
   return h.digest("hex");
 }
 
@@ -85,4 +83,45 @@ app.get("/api/healthz", (_req, res) => res.status(200).json({ ok: true }));
 // ================= GAS 疎通テスト =================
 app.get("/api/ping-gas", async (_req, res) => {
   try {
-    c
+    const j = await gasGet({ action: "poke" });
+    console.log("[PING] GAS poke ok:", j);
+    res.json({ ok: true, gas: j });
+  } catch (e) {
+    console.error("[PING] GAS poke failed:", e);
+    res.status(502).json({ ok: false, error: String(e) });
+  }
+});
+
+// ================= 設定確認エンドポイント =================
+app.get("/api/debug-config", (_req, res) => {
+  res.json({
+    hasGAS_URL: !!process.env.GAS_URL,
+    GAS_URL: process.env.GAS_URL || null,
+    hasSecret: !!process.env.GAS_SHARED_SECRET,
+    SIG_TTL: process.env.SIG_TTL || null,
+  });
+});
+
+// ================= サンプル API（必要に応じて追加） =================
+app.get("/api/categories", async (_req, res) => {
+  try {
+    const data = await gasGet({ action: "getCategories" });
+    res.json(data);
+  } catch (e) {
+    console.error("getCategories upstream error:", e);
+    res.status(502).json({ error: "getCategories failed" });
+  }
+});
+
+// ================= 静的ファイル配信 =================
+app.use(express.static(path.join(__dirname, "build")));
+app.get("*", (req, res, next) => {
+  if (req.path.startsWith("/api")) return next();
+  res.sendFile(path.join(__dirname, "build", "index.html"));
+});
+
+// ================= 起動 =================
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server started on :${PORT}`);
+});
