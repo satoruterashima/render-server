@@ -1,4 +1,4 @@
-﻿﻿// render-server/index.js — safe baseline
+﻿// render-server/index.js — safe baseline + GAS relay
 
 import express from "express";
 import path from "path";
@@ -13,17 +13,72 @@ app.use(express.urlencoded({ extended: true }));
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --- noisy request logger (必ず最初に) ---
+// noisy request logger
 app.use((req, _res, next) => {
   console.log(`[REQ] ${req.method} ${req.originalUrl}`);
   next();
 });
 
-// --- health & ping (これで生存確認できる) ---
+// health & ping
 app.get("/api/healthz", (_req, res) => res.status(200).json({ ok: true }));
 app.get("/__ping", (_req, res) => res.type("text").send(`OK ${new Date().toISOString()}`));
 
-// --- build の存在確認 & 一覧ダンプ ---
+// ===== GAS relay helpers =====
+const GAS_URL = process.env.GAS_URL || ""; // 例: https://script.google.com/macros/s/XXXX/exec
+
+async function gasGet(params) {
+  if (!GAS_URL) throw new Error("GAS_URL is empty");
+  const url = new URL(GAS_URL);
+  Object.entries(params || {}).forEach(([k, v]) => {
+    if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
+  });
+  const r = await fetch(url.toString(), { method: "GET" });
+  const text = await r.text().catch(() => "");
+  if (!r.ok) {
+    console.error("GAS GET failed:", r.status, text.slice(0, 300));
+    throw new Error(`GAS GET ${params?.action} ${r.status}`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    console.error("GAS JSON parse error:", e, text.slice(0, 300));
+    throw e;
+  }
+}
+
+// ===== API routes =====
+
+// /api/categories: GAS の getCategories を中継し、フロントが使いやすい形にそろえて返す
+app.get("/api/categories", async (_req, res) => {
+  try {
+    const rows = await gasGet({ action: "getCategories" }); // [[大,中,小,価格,画像], ...] を想定
+    // rows が配列なら配列、{ok,items} なら items を採用
+    const raw = Array.isArray(rows)
+      ? rows
+      : (rows && Array.isArray(rows.items))
+        ? rows.items
+        : [];
+
+    const items = raw
+      .map((r, i) => {
+        const a = Array.isArray(r);
+        const major = a ? String(r[0] || "") : String(r.major || "");
+        const mid   = a ? String(r[1] || "") : String(r.mid   || "");
+        const name  = a ? String(r[2] || "") : String(r.name  || "");
+        const price = a ? Number(r[3] || 0)  : Number(r.price || 0);
+        const image = a ? String(r[4] || "") : String(r.image || "");
+        return { id: `itm_${i}`, major, mid, name, price, image };
+      })
+      .filter(x => x.major && x.mid && x.name);
+
+    return res.json({ ok: true, items });
+  } catch (e) {
+    console.error("getCategories upstream error:", e);
+    return res.status(502).json({ ok: false, error: "getCategories failed" });
+  }
+});
+
+// ===== static files (順序が超重要：SPAより先) =====
 const BUILD_DIR = path.join(__dirname, "build");
 try {
   const st = fs.statSync(BUILD_DIR);
@@ -34,29 +89,26 @@ try {
   console.error("[BOOT] build dir not found:", BUILD_DIR, e);
 }
 
-// --- 静的配信（順序が超重要：SPAフォールバックより“先”） ---
 app.use("/static", express.static(path.join(BUILD_DIR, "static"), {
   immutable: true, maxAge: "1y",
 }));
 app.use(express.static(BUILD_DIR)); // index.html, asset-manifest.json など
 
-// --- SPA フォールバック（最後！/api や /__ は除外） ---
+// ===== SPA fallback (最後) =====
 app.get("*", (req, res, next) => {
   if (req.path.startsWith("/api") || req.path.startsWith("/__")) return next();
   res.sendFile(path.join(BUILD_DIR, "index.html"));
 });
 
-// --- エラーハンドラ（ログを必ず見る） ---
+// error handler + crash logs
 app.use((err, _req, res, _next) => {
   console.error("[ERR]", err);
   res.status(500).json({ ok: false, error: String(err) });
 });
-
-// --- 未捕捉例外のログ ---
 process.on("unhandledRejection", (e) => { console.error("[UNHANDLED_REJECTION]", e); });
 process.on("uncaughtException", (e) => { console.error("[UNCAUGHT_EXCEPTION]", e); });
 
-// --- 起動 ---
+// start
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server started on :${PORT}`);
