@@ -216,3 +216,14 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server started on :${PORT}`);
 });
+
+process.on("unhandledRejection", (e) => {
+  console.error("[UNHANDLED_REJECTION]", e);
+  process.exit(1);
+});
+process.on("uncaughtException", (e) => {
+  console.error("[UNCAUGHT_EXCEPTION]", e);
+  process.exit(1);
+});
+
+app.get("/__ping", (_req, res) => res.type("text").send("OK " + new Date().toISOString()));
