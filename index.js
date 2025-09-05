@@ -1,4 +1,6 @@
-﻿import express from "express";
+﻿// render-server/index.js
+
+import express from "express";
 import fetch from "node-fetch";
 import crypto from "crypto";
 import dotenv from "dotenv";
@@ -19,7 +21,7 @@ const __dirname = path.dirname(__filename);
 function signPayload(action, ts, userId = "") {
   const base = `${action}.${ts}.${userId}`;
   const h = crypto.createHmac("sha256", process.env.GAS_SHARED_SECRET || "");
-  h.update(base);
+  h.update(base); // 重要
   return h.digest("hex");
 }
 
@@ -102,18 +104,107 @@ app.get("/api/debug-config", (_req, res) => {
   });
 });
 
-// ================= サンプル API（必要に応じて追加） =================
+// ================= 管理系API（必要に応じて利用） =================
+app.get("/api/checkAdmin", async (req, res) => {
+  try {
+    const data = await gasGet({ action: "checkAdmin", userId: req.query.userId });
+    res.json(data);
+  } catch (e) { console.error(e); res.status(502).json({ error: "checkAdmin failed" }); }
+});
+
+app.get("/api/checkFirstAdmin", async (_req, res) => {
+  try {
+    const data = await gasGet({ action: "checkFirstAdmin" });
+    res.json(data);
+  } catch (e) { console.error(e); res.status(502).json({ error: "checkFirstAdmin failed" }); }
+});
+
+app.post("/api/registerFirstAdmin", async (req, res) => {
+  try {
+    const data = await gasPost({
+      action: "registerFirstAdmin",
+      userId: req.query.userId,
+      displayName: req.query.displayName,
+    });
+    res.json(data);
+  } catch (e) { console.error(e); res.status(502).json({ error: "registerFirstAdmin failed" }); }
+});
+
+app.get("/api/recordUser", async (req, res) => {
+  try {
+    const data = await gasGet({
+      action: "recordUser",
+      userId: req.query.userId,
+      displayName: req.query.displayName,
+    });
+    res.json(data);
+  } catch (e) { console.error(e); res.status(502).json({ error: "recordUser failed" }); }
+});
+
+app.get("/api/admins", async (_req, res) => {
+  try {
+    const data = await gasGet({ action: "getAdmins" });
+    res.json(data);
+  } catch (e) { console.error(e); res.status(502).json({ error: "getAdmins failed" }); }
+});
+
+app.post("/api/admins/add", async (req, res) => {
+  try {
+    const data = await gasPost({ action: "addAdmin", userId: req.body.userId });
+    res.json(data);
+  } catch (e) { console.error(e); res.status(502).json({ error: "addAdmin failed" }); }
+});
+
+app.post("/api/admins/remove", async (req, res) => {
+  try {
+    const data = await gasPost({ action: "removeAdmin", userId: req.body.userId });
+    res.json(data);
+  } catch (e) { console.error(e); res.status(502).json({ error: "removeAdmin failed" }); }
+});
+
+app.get("/api/users", async (_req, res) => {
+  try {
+    const data = await gasGet({ action: "getUsers" });
+    res.json(data);
+  } catch (e) { console.error(e); res.status(502).json({ error: "getUsers failed" }); }
+});
+
+// ================= 注文メニュー（カテゴリ） =================
+// GASの行配列 [[大,中,小(商品名),価格,画像URL], ...] → { ok:true, items:[...] } に整形して返す
 app.get("/api/categories", async (_req, res) => {
   try {
-    const data = await gasGet({ action: "getCategories" });
-    res.json(data);
+    const rows = await gasGet({ action: "getCategories" });
+    const items = (Array.isArray(rows) ? rows : [])
+      .filter(r => Array.isArray(r) && r[0])
+      .map((r, i) => ({
+        id: `itm_${i}`,
+        major: String(r[0] || ""),
+        mid: String(r[1] || ""),
+        name: String(r[2] || ""),
+        price: Number(r[3] || 0),
+        image: String(r[4] || ""),
+      }));
+    res.json({ ok: true, items });
   } catch (e) {
     console.error("getCategories upstream error:", e);
-    res.status(502).json({ error: "getCategories failed" });
+    res.status(502).json({ ok: false, error: "getCategories failed" });
   }
 });
 
-// ================= 静的ファイル配信 =================
+// ================= 受注 =================
+app.post("/api/order", async (req, res) => {
+  try {
+    const data = await gasPost({
+      action: "placeOrder",
+      userId: req.body.liffUserId,
+      items: req.body.items,
+      note: req.body.note,
+    });
+    res.json(data);
+  } catch (e) { console.error(e); res.status(502).json({ error: "order failed" }); }
+});
+
+// ================= 静的ファイル配信（SPA） =================
 app.use(express.static(path.join(__dirname, "build")));
 app.get("*", (req, res, next) => {
   if (req.path.startsWith("/api")) return next();
