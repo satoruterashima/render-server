@@ -1,4 +1,4 @@
-﻿// render-server/index.js — safe baseline + GAS relay
+﻿// render-server/index.js — POS + Admin API (GAS relay) + static hosting
 
 import express from "express";
 import path from "path";
@@ -46,19 +46,33 @@ async function gasGet(params) {
   }
 }
 
-// ===== API routes =====
+async function gasPost(body) {
+  if (!GAS_URL) throw new Error("GAS_URL is empty");
+  const r = await fetch(GAS_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {}),
+  });
+  const text = await r.text().catch(() => "");
+  if (!r.ok) {
+    console.error("GAS POST failed:", r.status, text.slice(0, 300));
+    throw new Error(`GAS POST ${body?.action} ${r.status}`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    console.error("GAS JSON parse error:", e, text.slice(0, 300));
+    throw e;
+  }
+}
 
-// /api/categories: GAS の getCategories を中継し、フロントが使いやすい形にそろえて返す
+// ===== POS APIs =====
 app.get("/api/categories", async (_req, res) => {
   try {
-    const rows = await gasGet({ action: "getCategories" }); // [[大,中,小,価格,画像], ...] を想定
-    // rows が配列なら配列、{ok,items} なら items を採用
+    const rows = await gasGet({ action: "getCategories" });
     const raw = Array.isArray(rows)
       ? rows
-      : (rows && Array.isArray(rows.items))
-        ? rows.items
-        : [];
-
+      : (rows && Array.isArray(rows.items)) ? rows.items : [];
     const items = raw
       .map((r, i) => {
         const a = Array.isArray(r);
@@ -70,7 +84,6 @@ app.get("/api/categories", async (_req, res) => {
         return { id: `itm_${i}`, major, mid, name, price, image };
       })
       .filter(x => x.major && x.mid && x.name);
-
     return res.json({ ok: true, items });
   } catch (e) {
     console.error("getCategories upstream error:", e);
@@ -78,7 +91,123 @@ app.get("/api/categories", async (_req, res) => {
   }
 });
 
-// ===== static files (順序が超重要：SPAより先) =====
+app.post("/api/order", async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!Array.isArray(body.items) || body.items.length === 0) {
+      return res.status(400).json({ ok:false, error:"items is empty" });
+    }
+    const total = body.items.reduce((s, it) => s + Number(it.price||0) * Number(it.qty||0), 0);
+    const payload = {
+      action: "placeOrder",
+      userId: body.liffUserId || "",
+      items: body.items,
+      note: body.note || "",
+      total
+    };
+    const j = await gasPost(payload);
+    if (!j || j.ok !== true) return res.status(502).json({ ok:false, error:"upstream not ok", detail:j });
+    return res.json({ ok:true, orderId: j.orderId, total });
+  } catch (e) {
+    console.error("order failed:", e);
+    return res.status(500).json({ ok:false, error:String(e) });
+  }
+});
+
+// ===== Admin APIs =====
+
+// 起動時にユーザーを記録（既存/新規はGAS側で吸収）
+app.get("/api/recordUser", async (req, res) => {
+  try {
+    const { userId, displayName } = req.query;
+    const j = await gasGet({ action: "recordUser", userId, displayName });
+    return res.json(j);
+  } catch (e) {
+    console.error("recordUser failed:", e);
+    return res.status(502).json({ ok:false, error:"recordUser failed" });
+  }
+});
+
+// 初回管理者が存在するか
+app.get("/api/checkFirstAdmin", async (_req, res) => {
+  try {
+    const j = await gasGet({ action: "checkFirstAdmin" });
+    return res.json(j);
+  } catch (e) {
+    console.error("checkFirstAdmin failed:", e);
+    return res.status(502).json({ ok:false, error:"checkFirstAdmin failed" });
+  }
+});
+
+// 自分が管理者か
+app.get("/api/checkAdmin", async (req, res) => {
+  try {
+    const { userId } = req.query;
+    const j = await gasGet({ action: "checkAdmin", userId });
+    return res.json(j);
+  } catch (e) {
+    console.error("checkAdmin failed:", e);
+    return res.status(502).json({ ok:false, error:"checkAdmin failed" });
+  }
+});
+
+// 管理者一覧
+app.get("/api/admins", async (_req, res) => {
+  try {
+    const j = await gasGet({ action: "getAdmins" });
+    return res.json(j);
+  } catch (e) {
+    console.error("getAdmins failed:", e);
+    return res.status(502).json({ ok:false, error:"getAdmins failed" });
+  }
+});
+
+// ユーザー一覧（アプリを一度開いた人）
+app.get("/api/users", async (_req, res) => {
+  try {
+    const j = await gasGet({ action: "getUsers" });
+    return res.json(j);
+  } catch (e) {
+    console.error("getUsers failed:", e);
+    return res.status(502).json({ ok:false, error:"getUsers failed" });
+  }
+});
+
+// 初回管理者に自分を登録
+app.post("/api/registerFirstAdmin", async (req, res) => {
+  try {
+    const { userId, displayName } = req.body || {};
+    const j = await gasPost({ action: "registerFirstAdmin", userId, displayName });
+    return res.json(j);
+  } catch (e) {
+    console.error("registerFirstAdmin failed:", e);
+    return res.status(502).json({ ok:false, error:"registerFirstAdmin failed" });
+  }
+});
+
+// 既存管理者が他ユーザーを追加/削除
+app.post("/api/admins/add", async (req, res) => {
+  try {
+    const { targetUserId } = req.body || {};
+    const j = await gasPost({ action: "addAdmin", userId: targetUserId });
+    return res.json(j);
+  } catch (e) {
+    console.error("addAdmin failed:", e);
+    return res.status(502).json({ ok:false, error:"addAdmin failed" });
+  }
+});
+app.post("/api/admins/remove", async (req, res) => {
+  try {
+    const { targetUserId } = req.body || {};
+    const j = await gasPost({ action: "removeAdmin", userId: targetUserId });
+    return res.json(j);
+  } catch (e) {
+    console.error("removeAdmin failed:", e);
+    return res.status(502).json({ ok:false, error:"removeAdmin failed" });
+  }
+});
+
+// ===== static files =====
 const BUILD_DIR = path.join(__dirname, "build");
 try {
   const st = fs.statSync(BUILD_DIR);
@@ -92,7 +221,7 @@ try {
 app.use("/static", express.static(path.join(BUILD_DIR, "static"), {
   immutable: true, maxAge: "1y",
 }));
-app.use(express.static(BUILD_DIR)); // index.html, asset-manifest.json など
+app.use(express.static(BUILD_DIR));
 
 // ===== SPA fallback (最後) =====
 app.get("*", (req, res, next) => {
@@ -100,7 +229,7 @@ app.get("*", (req, res, next) => {
   res.sendFile(path.join(BUILD_DIR, "index.html"));
 });
 
-// error handler + crash logs
+// error/crash logs
 app.use((err, _req, res, _next) => {
   console.error("[ERR]", err);
   res.status(500).json({ ok: false, error: String(err) });
@@ -112,56 +241,4 @@ process.on("uncaughtException", (e) => { console.error("[UNCAUGHT_EXCEPTION]", e
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server started on :${PORT}`);
-});
-
-// ===== /api/order: フロント→GAS placeOrder を中継 =====
-app.post("/api/order", async (req, res) => {
-  try {
-    const body = req.body || {};
-    // 最低限のバリデーション
-    if (!Array.isArray(body.items) || body.items.length === 0) {
-      return res.status(400).json({ ok:false, error:"items is empty" });
-    }
-
-    // 合計計算（サーバ側でもチェック）
-    const total = body.items.reduce((s, it) => s + Number(it.price||0) * Number(it.qty||0), 0);
-
-    // GAS に渡すペイロード
-    const payload = {
-      action: "placeOrder",
-      userId: body.liffUserId || "",  // LIFFの userId（なくても可）
-      items: body.items,               // [{name, price, qty, major, mid}]
-      note: body.note || "",
-      total
-    };
-
-    // ---- GAS リクエスト ----
-    const url = new URL(GAS_URL);
-    const r = await fetch(url.toString(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    const text = await r.text().catch(() => "");
-    if (!r.ok) {
-      console.error("GAS POST placeOrder failed:", r.status, text.slice(0,200));
-      return res.status(502).json({ ok:false, error:`upstream ${r.status}` });
-    }
-
-    let j;
-    try { j = JSON.parse(text); } catch (e) {
-      console.error("GAS JSON parse error:", e, text.slice(0,200));
-      return res.status(502).json({ ok:false, error:"invalid upstream json" });
-    }
-    if (!j || j.ok !== true) {
-      console.error("GAS returned not ok:", j);
-      return res.status(502).json({ ok:false, error:"upstream not ok", detail:j });
-    }
-
-    return res.json({ ok:true, orderId: j.orderId, total });
-  } catch (e) {
-    console.error("order failed:", e);
-    return res.status(500).json({ ok:false, error:String(e) });
-  }
 });
