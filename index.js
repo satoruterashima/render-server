@@ -242,3 +242,20 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server started on :${PORT}`);
 });
+
+// 生の getCategories を返して中身を確認する用（デバッグ）
+app.get("/api/_debug/raw-categories", async (_req, res) => {
+  try {
+    const raw = await gasGet({ action: "getCategories" });
+    res.json({ raw });
+  } catch (e) {
+    console.error("debug raw-categories failed:", e);
+    res.status(502).json({ ok:false, error:String(e) });
+  }
+});
+
+// いまの GAS_URL を確認（先頭だけ表示）
+app.get("/api/_debug/env", (_req, res) => {
+  const u = process.env.GAS_URL || "";
+  res.json({ GAS_URL_head: u.slice(0, 40) + (u.length>40 ? "..." : "") });
+});
