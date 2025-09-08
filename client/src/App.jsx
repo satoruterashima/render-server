@@ -181,7 +181,15 @@ export default function App() {
   };
 
   return (
-    <div className="app" style={{ padding: 16, fontFamily: 'system-ui, sans-serif' }}>
+	<div
+	  className="app"
+	  style={{
+	    padding: 16,
+	    fontFamily: 'system-ui, sans-serif',
+	    color: '#fff',        // ← 文字色を明示
+	    minHeight: '100vh'    // ← 画面いっぱい使う
+	  }}
+	>
       <header style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
         <h1 style={{ margin: 0, fontSize: 20 }}>LIFF POS 注文</h1>
         {admin && (
