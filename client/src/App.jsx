@@ -1,44 +1,108 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
-/* 管理タブが無い状態 *
-isAdmin && <nav><a href="#admin">管理</a></nav>
+import React, { useEffect, useMemo, useState } from 'react';
 
+/** ===== API helpers（サーバ同居想定: baseは空でOK） ===== */
+const API_BASE = '';
 
-function App() {
-  const [count, setCount] = useState(0)
+async function apiJson(path, opts) {
+  const r = await fetch(`${API_BASE}${path}`, { credentials: 'include', ...(opts || {}) });
+  const text = await r.text();
+  try {
+    const j = JSON.parse(text);
+    if (!r.ok) throw new Error(j?.error || `HTTP ${r.status}`);
+    return j;
+  } catch (e) {
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${text.slice(0, 200)}`);
+    throw e;
+  }
+}
 
-  return (
-    <>import React, { useEffect, useMemo, useState } from 'react';
-import { fetchCategories, isAdmin, registerAdmin } from './api';
-// LIFF 初期化は既存のロジックを流用してください
-// import liff from '@line/liff';
+async function fetchCategories() {
+  const j = await apiJson('/api/categories');
+  const raw = Array.isArray(j?.items) ? j.items : Array.isArray(j) ? j : [];
+  return normalizeCategories(raw);
+}
 
+async function checkAdmin(userId) {
+  if (!userId) return { ok: false, isAdmin: false };
+  try {
+    const r = await fetch(`/api/checkAdmin?userId=${encodeURIComponent(userId)}`);
+    if (!r.ok) return { ok: false, isAdmin: false };
+    return await r.json();
+  } catch {
+    return { ok: false, isAdmin: false };
+  }
+}
+
+async function registerFirstAdmin(userId, displayName) {
+  const r = await fetch('/api/registerFirstAdmin', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, displayName })
+  });
+  return r.json();
+}
+
+/** サーバが2次元配列を返しても、オブジェクト配列に正規化 */
+function normalizeCategories(input) {
+  if (!Array.isArray(input)) return [];
+  // 2次元配列: [カテゴリ, サブカテゴリ, 商品名, 価格, 画像URL]
+  if (input.length > 0 && Array.isArray(input[0])) {
+    return input.map((row, idx) => {
+      const [category, subcategory, name, price, imageUrl] = row;
+      return {
+        id: slugify(`${category}-${subcategory}-${name}-${idx}`),
+        category: String(category || ''),
+        subcategory: String(subcategory || ''),
+        name: String(name || ''),
+        price: Number(price || 0),
+        imageUrl: String(imageUrl || '')
+      };
+    }).filter(x => x.name);
+  }
+  // すでにオブジェクト配列
+  return input.map((x, i) => ({
+    id: String(x.id ?? slugify(`${x.category ?? ''}-${x.subcategory ?? ''}-${x.name ?? x.title ?? ''}-${i}`)),
+    category: String(x.category ?? ''),
+    subcategory: String(x.subcategory ?? ''),
+    name: String(x.name ?? x.title ?? ''),
+    price: Number(x.price ?? 0),
+    imageUrl: String(x.imageUrl ?? x.image ?? '')
+  })).filter(x => x.name);
+}
+
+function slugify(s) {
+  return String(s).normalize('NFKC')
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9\-_.]/g, '')
+    .slice(0, 64) || String(Date.now());
+}
+
+/** ===== App Component ===== */
 export default function App() {
-  const [user, setUser] = useState(null);         // { userId, displayName }
+  const [user, setUser] = useState(null);      // { userId, displayName }
   const [admin, setAdmin] = useState(false);
   const [cats, setCats] = useState([]);
   const [loadingCats, setLoadingCats] = useState(true);
   const [catsError, setCatsError] = useState('');
 
-const prof = await liff.getProfile();
-const r = await checkAdmin(prof.userId);
-setIsAdmin(!!r.isAdmin);
-
-
   useEffect(() => {
     (async () => {
       try {
-        // 既存の LIFF 初期化を使用
-        // await liff.init({ liffId: process.env.REACT_APP_LIFF_ID });
-        // if (!liff.isLoggedIn()) liff.login();
-        // const p = await liff.getProfile();
-        const p = { userId: 'mock-user', displayName: 'Mock' }; // ← 既存に置換
-        setUser({ userId: p.userId, displayName: p.displayName });
+        // --- LIFF が使える場合のみ実ユーザーを読む（ない場合はモック） ---
+        let userId = 'mock-user';
+        let displayName = 'Mock';
+        if (typeof window !== 'undefined' && window.liff) {
+          await window.liff.init({ liffId: import.meta.env.VITE_LIFF_ID });
+          if (!window.liff.isLoggedIn()) window.liff.login();
+          const p = await window.liff.getProfile();
+          userId = p.userId;
+          displayName = p.displayName;
+        }
+        setUser({ userId, displayName });
 
-        const r = await isAdmin(p.userId);
-        setAdmin(!!r.isAdmin);
+        const chk = await checkAdmin(userId);
+        setAdmin(!!chk.isAdmin);
       } catch (e) {
         console.error('init failed', e);
       }
@@ -52,6 +116,7 @@ setIsAdmin(!!r.isAdmin);
       const list = await fetchCategories();
       setCats(list);
     } catch (e) {
+      console.error(e);
       setCatsError(e.message || 'failed');
     } finally {
       setLoadingCats(false);
@@ -60,44 +125,51 @@ setIsAdmin(!!r.isAdmin);
 
   useEffect(() => { loadCategories(); }, []);
 
-  const needAdminRescue = useMemo(() => user && !admin, [user, admin]);
+  const needAdminRescue = useMemo(() => !!(user && !admin), [user, admin]);
 
   const handleRescueRegister = async () => {
     if (!user) return;
-    const r = await registerAdmin(user.userId, user.displayName);
-    if (r && r.ok) {
-      const chk = await isAdmin(user.userId);
+    const r = await registerFirstAdmin(user.userId, user.displayName);
+    if (r?.ok) {
+      const chk = await checkAdmin(user.userId);
       setAdmin(!!chk.isAdmin);
       alert(chk.isAdmin ? '管理者登録に成功しました' : '登録は完了しましたが反映に失敗しました');
     } else {
-      alert('登録に失敗しました: ' + (r.error || 'unknown'));
+      alert('登録に失敗しました: ' + (r?.error || 'unknown'));
     }
   };
 
   return (
-    <div className="app">
-      <header>
-        <h1>LIFF POS 注文</h1>
-        {admin && <nav><a href="#admin">管理</a></nav>}
+    <div className="app" style={{ padding: 16, fontFamily: 'system-ui, sans-serif' }}>
+      <header style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+        <h1 style={{ margin: 0, fontSize: 20 }}>LIFF POS 注文</h1>
+        {admin && (
+          <nav><a href="#admin">管理</a></nav>
+        )}
       </header>
 
-      <main>
+      <main style={{ marginTop: 16 }}>
         {loadingCats && <p>商品カテゴリを読み込み中…</p>}
+
         {catsError && (
           <div>
             <p>商品取得に失敗しました（{catsError}）</p>
             <button onClick={loadCategories}>再試行</button>
           </div>
         )}
+
         {!loadingCats && !catsError && cats.length === 0 && (
-          <p>商品カテゴリが未登録です（`Categories` シートをご確認ください）。</p>
+          <p>商品カテゴリが未登録です（スプレッドシート「Categories」をご確認ください）。</p>
         )}
+
         {!loadingCats && cats.length > 0 && (
-          <ul>
+          <ul style={{ paddingLeft: 20 }}>
             {cats.map(c => (
-              <li key={c.id}>
-                {c.imageUrl ? <img src={c.imageUrl} alt={c.name} style={{width:48,height:48,objectFit:'cover'}}/> : null}
-                <span>{c.name}</span>
+              <li key={c.id} style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                {c.imageUrl ? (
+                  <img src={c.imageUrl} alt={c.name} width={48} height={48} style={{ objectFit: 'cover', borderRadius: 6 }} />
+                ) : null}
+                <span>{c.category} / {c.subcategory} — {c.name}：¥{c.price}</span>
               </li>
             ))}
           </ul>
@@ -115,29 +187,3 @@ setIsAdmin(!!r.isAdmin);
     </div>
   );
 }
-
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
-}
-
-export default App
