@@ -1,19 +1,20 @@
 {
   "name": "liff-pos-server",
   "version": "1.0.0",
-  "main": "index.js",
-  "dependencies": {
-    "express": "^4.18.2",
-    "multer": "^1.4.5-lts.1",
-    "node-fetch": "^2.6.7",
-    "dotenv": "^16.3.1"
-  },
+  "private": true,
   "type": "module",
+  "main": "index.js",
   "scripts": {
     "build": "if [ -d client ] && [ -f client/package.json ]; then ( [ -f client/package-lock.json ] && npm ci --prefix client || npm install --prefix client ); npm run build --prefix client; else echo 'no client app, skip frontend build'; fi",
     "start": "node index.js"
   },
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "multer": "^1.4.5-lts.1",
+    "node-fetch": "^2.7.0"
+  },
   "engines": {
-    "node": ">=20.19 <21 || >=22.12" }
+    "node": ">=20.19 <21 || >=22.12"
   }
 }
