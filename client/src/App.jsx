@@ -86,6 +86,26 @@ export default function App() {
   const [loadingCats, setLoadingCats] = useState(true);
   const [catsError, setCatsError] = useState('');
 
+ // カテゴリ/サブカテゴリでグルーピング（表示用）
+ const groupedCats = useMemo(() => {
+   const map = new Map(); // category -> (subcategory -> items[])
+   for (const it of cats) {
+     const cat = it.category || '未分類';
+     const sub = it.subcategory || ''; // 空ならサブカテゴリ見出しを出さない
+     if (!map.has(cat)) map.set(cat, new Map());
+     const subMap = map.get(cat);
+     if (!subMap.has(sub)) subMap.set(sub, []);
+     subMap.get(sub).push(it);
+   }
+   // 同一グループ内は商品名でソート（日本語対応）
+   for (const [, subMap] of map) {
+     for (const [k, arr] of subMap) {
+       subMap.set(k, arr.slice().sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ja')));
+     }
+   }
+   return map;
+ }, [cats]);
+
   // --- Cart ---
   const [cart, setCart] = useState([]);
   const [submitting, setSubmitting] = useState(false);
@@ -244,35 +264,53 @@ export default function App() {
         )}
 
         {!loadingCats && !catsError && cats.length > 0 && (
-          <ul style={{ paddingLeft: 20 }}>
-            {cats.map(c => (
-              <li
-                key={c.id}
-                style={{
-                  marginBottom: 8,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  justifyContent: 'space-between'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {c.imageUrl ? (
-                    <img
-                      src={c.imageUrl}
-                      alt={c.name}
-                      width={48}
-                      height={48}
-                      style={{ objectFit: 'cover', borderRadius: 6 }}
-                    />
-                  ) : null}
-                  <span>{c.category} / {c.subcategory} — {c.name}：¥{c.price}</span>
-                </div>
-                <button onClick={() => addToCart(c)} style={{ padding: '6px 10px' }}>追加</button>
-              </li>
-            ))}
-          </ul>
-        )}
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    {[...groupedCats.keys()].map(cat => {
+      const subMap = groupedCats.get(cat);
+      return (
+        <section key={cat} style={{ marginTop: 8 }}>
+          <h2 style={{ margin: '12px 0 6px', fontSize: 18 }}>{cat}</h2>
+
+          {[...subMap.keys()].map(sub => (
+            <div key={sub || '-'} style={{ marginLeft: 8, marginBottom: 8 }}>
+              {sub && <h3 style={{ margin: '6px 0', fontSize: 15, opacity: .85 }}>{sub}</h3>}
+
+              <ul style={{ paddingLeft: 20, marginTop: 6 }}>
+                {subMap.get(sub).map(c => (
+                  <li
+                    key={c.id}
+                    style={{
+                      marginBottom: 8,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {c.imageUrl ? (
+                        <img
+                          src={c.imageUrl}
+                          alt={c.name}
+                          width={48}
+                          height={48}
+                          style={{ objectFit: 'cover', borderRadius: 6 }}
+                        />
+                      ) : null}
+                      <span>{c.name}：¥{c.price}</span>
+                    </div>
+                    <button onClick={() => addToCart(c)} style={{ padding: '6px 10px' }}>追加</button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </section>
+      );
+    })}
+  </div>
+)}
+
 
         {/* --- Cart --- */}
         {cart.length > 0 && (
