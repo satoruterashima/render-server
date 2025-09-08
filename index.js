@@ -313,3 +313,23 @@ app.get('/healthz', (req, res) => res.json({ ok:true, ts: Date.now() }));
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'build', 'index.html'));
 });
+import path from 'path';
+import { fileURLToPath } from 'url';
+import express from 'express';
+
+const app = express();
+// ...（APIのルーティングが上にある想定）
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// React のビルド成果物を配信
+app.use(express.static(path.join(__dirname, '..', 'client', 'build')));
+
+// ヘルスチェック（任意）
+app.get('/healthz', (_req, res) => res.json({ ok: true, ts: Date.now() }));
+
+// SPA ルーティング
+app.get('*', (_req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'client', 'build', 'index.html'));
+});
