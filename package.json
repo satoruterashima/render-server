@@ -10,8 +10,8 @@
   },
   "type": "module",
   "scripts": {
-    "build": "npm ci --prefix client && npm run build --prefix client",
-    "start": "node server/index.js"
+    "build": "if [ -d client ] && [ -f client/package.json ]; then ( [ -f client/package-lock.json ] && npm ci --prefix client || npm install --prefix client ); npm run build --prefix client; else echo 'no client app, skip frontend build'; fi",
+    "start": "node index.js"
   },
   "engines": {
     "node": "20.x"
