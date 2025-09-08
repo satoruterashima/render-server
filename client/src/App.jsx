@@ -211,17 +211,36 @@ export default function App() {
         )}
 
         {!loadingCats && cats.length > 0 && (
-          <u{cats.map(c => (
-  <li key={c.id} style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      {c.imageUrl ? (
-        <img src={c.imageUrl} alt={c.name} width={48} height={48} style={{ objectFit: 'cover', borderRadius: 6 }} />
-      ) : null}
-      <span>{c.category} / {c.subcategory} — {c.name}：¥{c.price}</span>
-    </div>
-    <button onClick={() => addToCart(c)} style={{ padding: '6px 10px' }}>追加</button>
-  </li>
-))}
+  <ul style={{ paddingLeft: 20 }}>
+    {cats.map(c => (
+      <li
+        key={c.id}
+        style={{
+          marginBottom: 8,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          justifyContent: 'space-between'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {c.imageUrl ? (
+            <img
+              src={c.imageUrl}
+              alt={c.name}
+              width={48}
+              height={48}
+              style={{ objectFit: 'cover', borderRadius: 6 }}
+            />
+          ) : null}
+          <span>{c.category} / {c.subcategory} — {c.name}：¥{c.price}</span>
+        </div>
+        <button onClick={() => addToCart(c)} style={{ padding: '6px 10px' }}>追加</button>
+      </li>
+    ))}
+  </ul>
+)}
+
 
           </ul>
           {/* --- Cart --- */}
