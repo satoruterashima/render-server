@@ -1,27 +1,39 @@
 <!doctype html>
-<html lang="en">
+<html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>LIFF POS 注文</title>
-	<meta name="theme-color" content="#111" />
-	<style>
-  :root { color-scheme: light dark; }
-  /* LIFFのWebViewがダーク背景でも文字が見えるように強制 */
-  html, body {
-    background: #111;
-    color: #fff;
-    margin: 0;
-    padding: 0;
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans JP", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
-  }
-  a, button { color: inherit; }
-</style>
-
+    <meta name="theme-color" content="#111" />
+    <style>
+      :root { color-scheme: light dark; }
+      html, body {
+        background:#111; color:#fff; margin:0; padding:0;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans JP", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+      }
+      a, button { color: inherit; }
+      /* ランタイムエラーを画面に出す簡易オーバーレイ */
+      #err-overlay {
+        position: fixed; inset: 8px; background: rgba(0,0,0,.85);
+        color:#fff; font-size:12px; line-height:1.4; padding:12px; border:1px solid #444; border-radius:8px; display:none; z-index:9999; white-space:pre-wrap;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <div id="err-overlay"></div>
+
+    <script>
+      // ランタイムエラー可視化
+      (function(){
+        const box = document.getElementById('err-overlay');
+        function show(msg){ box.style.display='block'; box.textContent = 'Runtime Error\\n\\n' + msg; }
+        window.addEventListener('error', e => show(e?.error?.stack || e?.message || String(e)));
+        window.addEventListener('unhandledrejection', e => show((e?.reason && (e.reason.stack || e.reason.message)) || String(e)));
+      })();
+    </script>
+
+    <!-- Vite 本番ビルドはこの1行を起点にバンドルを読み込みます -->
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

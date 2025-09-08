@@ -182,13 +182,12 @@ export default function App() {
 
   return (
 	<div
-	  className="app"
-	  style={{
-	    padding: 16,
-	    fontFamily: 'system-ui, sans-serif',
-	    color: '#fff',        // ← 文字色を明示
-	    minHeight: '100vh'    // ← 画面いっぱい使う
-	  }}
+  className="app"
+  style={{ padding: 16, fontFamily: 'system-ui, sans-serif', color: '#fff', minHeight: '100vh' }}
+>
+  {/* ここが見えたら React は動いています */}
+  <p style={{opacity:.6,fontSize:12,margin:'4px 0'}}>DEBUG: app mounted</p>
+
 	>
       <header style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
         <h1 style={{ margin: 0, fontSize: 20 }}>LIFF POS 注文</h1>

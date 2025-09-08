@@ -221,22 +221,13 @@ app.get("/api/_debug/env", (_req, res) => {
 });
 
 // ---- static files (root ./build) ----
-const BUILD_DIR = path.join(__dirname, "build");
-try {
-  const st = fs.statSync(BUILD_DIR);
-  console.log("[BOOT] build dir:", BUILD_DIR, "exists:", st.isDirectory());
-  const list = fs.readdirSync(BUILD_DIR);
-  console.log("[BOOT] build files:", list);
-} catch (e) {
-  console.error("[BOOT] build dir not found:", BUILD_DIR, e);
-}
-
 const DIST_DIR = path.join(__dirname, "client", "dist");
 app.use(express.static(DIST_DIR, { maxAge: "1h" }));
 app.get("*", (req, res, next) => {
   if (req.path.startsWith("/api") || req.path.startsWith("/__")) return next();
   res.sendFile(path.join(DIST_DIR, "index.html"));
 });
+
 
 
 // error/crash logs
