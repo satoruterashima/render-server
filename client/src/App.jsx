@@ -85,20 +85,6 @@ export default function App() {
   const [cats, setCats] = useState([]);
   const [loadingCats, setLoadingCats] = useState(true);
   const [catsError, setCatsError] = useState('');
-  
-// --- Tabs: カテゴリタブ制御 ---
- const ALL = '__ALL__';
- const [activeCat, setActiveCat] = useState(ALL);
- const categoryList = useMemo(() => [...groupedCats.keys()], [groupedCats]);
- useEffect(() => {
-   // カテゴリが無いなら「すべて」、あれば現状の選択を維持（無効なら先頭に寄せる）
-   if (categoryList.length === 0) {
-     setActiveCat(ALL);
-   } else if (activeCat !== ALL && !categoryList.includes(activeCat)) {
-     setActiveCat(categoryList[0]);
-   }
- }, [categoryList]); // eslint-disable-line react-hooks/exhaustive-deps
-
 
  // カテゴリ/サブカテゴリでグルーピング（表示用）
  const groupedCats = useMemo(() => {
@@ -119,6 +105,19 @@ export default function App() {
    }
    return map;
  }, [cats]);
+
+// --- Tabs: カテゴリタブ制御 ---
+ const ALL = '__ALL__';
+ const [activeCat, setActiveCat] = useState(ALL);
+ const categoryList = useMemo(() => [...groupedCats.keys()], [groupedCats]);
+ useEffect(() => {
+   // カテゴリが無いなら「すべて」、あれば現状の選択を維持（無効なら先頭に寄せる）
+   if (categoryList.length === 0) {
+     setActiveCat(ALL);
+   } else if (activeCat !== ALL && !categoryList.includes(activeCat)) {
+     setActiveCat(categoryList[0]);
+   }
+ }, [categoryList]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Cart ---
   const [cart, setCart] = useState([]);
