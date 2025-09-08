@@ -67,29 +67,70 @@ async function gasPost(body) {
 }
 
 // ===== POS APIs =====
-app.get("/api/categories", async (_req, res) => {
+import fetch from 'node-fetch';
+
+const GAS = process.env.GAS_BASE_URL;
+const FETCH_TIMEOUT_MS = 15000;
+
+app.get('/api/categories', async (req, res) => {
+  const url = `${GAS}?action=getCategories`;
   try {
-    const rows = await gasGet({ action: "getCategories" });
-    const raw = Array.isArray(rows)
-      ? rows
-      : (rows && Array.isArray(rows.items)) ? rows.items : [];
-    const items = raw
-      .map((r, i) => {
-        const a = Array.isArray(r);
-        const major = a ? String(r[0] || "") : String(r.major || "");
-        const mid   = a ? String(r[1] || "") : String(r.mid   || "");
-        const name  = a ? String(r[2] || "") : String(r.name  || "");
-        const price = a ? Number(r[3] || 0)  : Number(r.price || 0);
-        const image = a ? String(r[4] || "") : String(r.image || "");
-        return { id: `itm_${i}`, major, mid, name, price, image };
-      })
-      .filter(x => x.major && x.mid && x.name);
-    return res.json({ ok: true, items });
-  } catch (e) {
-    console.error("getCategories upstream error:", e);
-    return res.status(502).json({ ok: false, error: "getCategories failed" });
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+
+    const r = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(timer);
+
+    const text = await r.text();
+    let j;
+    try { j = JSON.parse(text); } catch {
+      console.error('[categories] non-JSON from GAS:', text);
+      return res.status(502).json({ ok:false, error:'bad_upstream_format' });
+    }
+
+    if (!r.ok || j.ok === false) {
+      console.error('[categories] upstream error', { status:r.status, body:j });
+      return res.status(502).json({ ok:false, error:'upstream_error', detail:j });
+    }
+    return res.json(j);
+  } catch (err) {
+    console.error('[categories] fetch failed', err);
+    return res.status(502).json({ ok:false, error:'fetch_failed' });
   }
 });
+
+app.post('/api/admins/is-admin', express.json(), async (req, res) => {
+  try {
+    const r = await fetch(process.env.GAS_BASE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action:'isAdmin', userId: req.body.userId })
+    });
+    const j = await r.json();
+    if (!r.ok || j.ok === false) return res.status(502).json({ ok:false, error:'upstream_error', detail:j });
+    res.json(j);
+  } catch (e) {
+    console.error('[is-admin] failed', e);
+    res.status(502).json({ ok:false, error:'fetch_failed' });
+  }
+});
+
+app.post('/api/admins/register', express.json(), async (req, res) => {
+  try {
+    const r = await fetch(process.env.GAS_BASE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action:'registerAdmin', userId: req.body.userId, displayName: req.body.displayName })
+    });
+    const j = await r.json();
+    if (!r.ok || j.ok === false) return res.status(502).json({ ok:false, error:'upstream_error', detail:j });
+    res.json(j);
+  } catch (e) {
+    console.error('[register-admin] failed', e);
+    res.status(502).json({ ok:false, error:'fetch_failed' });
+  }
+});
+
 
 app.post("/api/order", async (req, res) => {
   try {
@@ -258,4 +299,17 @@ app.get("/api/_debug/raw-categories", async (_req, res) => {
 app.get("/api/_debug/env", (_req, res) => {
   const u = process.env.GAS_URL || "";
   res.json({ GAS_URL_head: u.slice(0, 40) + (u.length>40 ? "..." : "") });
+});
+
+import path from 'path';
+import { fileURLToPath } from 'url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+app.use(express.static(path.join(__dirname, '..', 'build'))); // ← build を配信
+
+app.get('/healthz', (req, res) => res.json({ ok:true, ts: Date.now() }));
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'build', 'index.html'));
 });
