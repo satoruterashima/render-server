@@ -85,6 +85,20 @@ export default function App() {
   const [cats, setCats] = useState([]);
   const [loadingCats, setLoadingCats] = useState(true);
   const [catsError, setCatsError] = useState('');
+  
+// --- Tabs: カテゴリタブ制御 ---
+ const ALL = '__ALL__';
+ const [activeCat, setActiveCat] = useState(ALL);
+ const categoryList = useMemo(() => [...groupedCats.keys()], [groupedCats]);
+ useEffect(() => {
+   // カテゴリが無いなら「すべて」、あれば現状の選択を維持（無効なら先頭に寄せる）
+   if (categoryList.length === 0) {
+     setActiveCat(ALL);
+   } else if (activeCat !== ALL && !categoryList.includes(activeCat)) {
+     setActiveCat(categoryList[0]);
+   }
+ }, [categoryList]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
  // カテゴリ/サブカテゴリでグルーピング（表示用）
  const groupedCats = useMemo(() => {
@@ -259,57 +273,138 @@ export default function App() {
           </div>
         )}
 
-        {!loadingCats && !catsError && cats.length === 0 && (
-          <p>商品カテゴリが未登録です（スプレッドシート「Categories」をご確認ください）。</p>
-        )}
-
         {!loadingCats && !catsError && cats.length > 0 && (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-    {[...groupedCats.keys()].map(cat => {
-      const subMap = groupedCats.get(cat);
-      return (
-        <section key={cat} style={{ marginTop: 8 }}>
-          <h2 style={{ margin: '12px 0 6px', fontSize: 18 }}>{cat}</h2>
+  <>
+    {/* タブバー */}
+    <div
+      style={{
+        display: 'flex',
+        gap: 8,
+        overflowX: 'auto',
+        padding: '8px 0',
+        marginBottom: 8,
+        position: 'sticky',
+        top: 0,
+        background: '#111',
+        zIndex: 10
+      }}
+    >
+      {[ALL, ...categoryList].map(cat => {
+        const active = activeCat === cat;
+        return (
+          <button
+            key={cat}
+            onClick={() => setActiveCat(cat)}
+            style={{
+              padding: '6px 12px',
+              borderRadius: 9999,
+              border: '1px solid #444',
+              background: active ? '#3a3a3a' : '#1f1f1f',
+              color: '#fff',
+              whiteSpace: 'nowrap',
+              cursor: 'pointer'
+            }}
+          >
+            {cat === ALL ? 'すべて' : cat}
+          </button>
+        );
+      })}
+    </div>
 
-          {[...subMap.keys()].map(sub => (
-            <div key={sub || '-'} style={{ marginLeft: 8, marginBottom: 8 }}>
-              {sub && <h3 style={{ margin: '6px 0', fontSize: 15, opacity: .85 }}>{sub}</h3>}
+    {/* 中身：選択が「すべて」なら全カテゴリ、そうでなければ該当カテゴリのみ */}
+    {activeCat === ALL ? (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {[...groupedCats.keys()].map(cat => {
+          const subMap = groupedCats.get(cat);
+          return (
+            <section key={cat} style={{ marginTop: 8 }}>
+              <h2 style={{ margin: '12px 0 6px', fontSize: 18 }}>{cat}</h2>
 
-              <ul style={{ paddingLeft: 20, marginTop: 6 }}>
-                {subMap.get(sub).map(c => (
-                  <li
-                    key={c.id}
-                    style={{
-                      marginBottom: 8,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      justifyContent: 'space-between'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {c.imageUrl ? (
-                        <img
-                          src={c.imageUrl}
-                          alt={c.name}
-                          width={48}
-                          height={48}
-                          style={{ objectFit: 'cover', borderRadius: 6 }}
-                        />
-                      ) : null}
-                      <span>{c.name}：¥{c.price}</span>
-                    </div>
-                    <button onClick={() => addToCart(c)} style={{ padding: '6px 10px' }}>追加</button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </section>
-      );
-    })}
-  </div>
+              {[...subMap.keys()].map(sub => (
+                <div key={sub || '-'} style={{ marginLeft: 8, marginBottom: 8 }}>
+                  {sub && <h3 style={{ margin: '6px 0', fontSize: 15, opacity: .85 }}>{sub}</h3>}
+                  <ul style={{ paddingLeft: 20, marginTop: 6 }}>
+                    {subMap.get(sub).map(c => (
+                      <li
+                        key={c.id}
+                        style={{
+                          marginBottom: 8,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          justifyContent: 'space-between'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {c.imageUrl ? (
+                            <img
+                              src={c.imageUrl}
+                              alt={c.name}
+                              width={48}
+                              height={48}
+                              style={{ objectFit: 'cover', borderRadius: 6 }}
+                            />
+                          ) : null}
+                          <span>{c.name}：¥{c.price}</span>
+                        </div>
+                        <button onClick={() => addToCart(c)} style={{ padding: '6px 10px' }}>追加</button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </section>
+          );
+        })}
+      </div>
+    ) : (
+      (() => {
+        const subMap = groupedCats.get(activeCat);
+        if (!subMap) return null;
+        return (
+          <section key={activeCat} style={{ marginTop: 8 }}>
+            <h2 style={{ margin: '12px 0 6px', fontSize: 18 }}>{activeCat}</h2>
+
+            {[...subMap.keys()].map(sub => (
+              <div key={sub || '-'} style={{ marginLeft: 8, marginBottom: 8 }}>
+                {sub && <h3 style={{ margin: '6px 0', fontSize: 15, opacity: .85 }}>{sub}</h3>}
+                <ul style={{ paddingLeft: 20, marginTop: 6 }}>
+                  {subMap.get(sub).map(c => (
+                    <li
+                      key={c.id}
+                      style={{
+                        marginBottom: 8,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        justifyContent: 'space-between'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {c.imageUrl ? (
+                          <img
+                            src={c.imageUrl}
+                            alt={c.name}
+                            width={48}
+                            height={48}
+                            style={{ objectFit: 'cover', borderRadius: 6 }}
+                          />
+                        ) : null}
+                        <span>{c.name}：¥{c.price}</span>
+                      </div>
+                      <button onClick={() => addToCart(c)} style={{ padding: '6px 10px' }}>追加</button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </section>
+        );
+      })()
+    )}
+  </>
 )}
+
 
 
         {/* --- Cart --- */}
