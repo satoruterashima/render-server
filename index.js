@@ -231,14 +231,13 @@ try {
   console.error("[BOOT] build dir not found:", BUILD_DIR, e);
 }
 
-app.use("/static", express.static(path.join(BUILD_DIR, "static"), { immutable: true, maxAge: "1y" }));
-app.use(express.static(BUILD_DIR));
-
-// SPA fallback (最後)
+const DIST_DIR = path.join(__dirname, "client", "dist");
+app.use(express.static(DIST_DIR, { maxAge: "1h" }));
 app.get("*", (req, res, next) => {
   if (req.path.startsWith("/api") || req.path.startsWith("/__")) return next();
-  res.sendFile(path.join(BUILD_DIR, "index.html"));
+  res.sendFile(path.join(DIST_DIR, "index.html"));
 });
+
 
 // error/crash logs
 app.use((err, _req, res, _next) => {
