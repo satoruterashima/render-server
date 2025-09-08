@@ -101,12 +101,23 @@ export default function App() {
         let userId = 'mock-user';
         let displayName = 'Mock';
         if (typeof window !== 'undefined' && window.liff) {
-          await window.liff.init({ liffId: import.meta.env.VITE_LIFF_ID });
-          if (!window.liff.isLoggedIn()) window.liff.login();
-          const p = await window.liff.getProfile();
-          userId = p.userId;
-          displayName = p.displayName;
-        }
+  try {
+    const liffId = import.meta.env.VITE_LIFF_ID || window.LIFF_ID || '';
+    if (!liffId) throw new Error('LIFF_ID_MISSING');
+    await window.liff.init({ liffId });
+    if (!window.liff.isLoggedIn()) {
+      // LIFF内なら login() は遷移を引き起こすので try/catch で握る
+      try { window.liff.login(); return; } catch (_) {}
+    }
+    const p = await window.liff.getProfile();
+    userId = p.userId;
+    displayName = p.displayName;
+  } catch (e) {
+    console.warn('LIFF init skipped:', e);
+    // 失敗してもモックで続行（画面は落とさない）
+  }
+}
+
         setUser({ userId, displayName });
 
         const chk = await checkAdmin(userId);
