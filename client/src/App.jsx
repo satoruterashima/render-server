@@ -191,6 +191,28 @@ export default function App() {
     }
   };
 
+  // 初回管理者登録（救済UIのボタンから呼ばれる）
+  const handleRescueRegister = async () => {
+    try {
+      if (!user) {
+        alert('ユーザー情報が未取得です');
+        return;
+      }
+      const r = await registerFirstAdmin(user.userId, user.displayName);
+      if (r?.ok) {
+        const chk = await checkAdmin(user.userId);
+        setAdmin(!!chk.isAdmin);
+        alert(chk.isAdmin ? '管理者登録に成功しました' : '登録完了。反映確認に失敗しました');
+      } else {
+        alert('登録に失敗しました: ' + (r?.error || 'unknown'));
+      }
+    } catch (e) {
+      alert('登録エラー: ' + (e?.message || String(e)));
+    }
+  };
+
+
+
   return (
 	<div
   className="app"
@@ -279,7 +301,7 @@ export default function App() {
           <section style={{ marginTop: 24 }}>
             <h2>管理者登録</h2>
             <p>このアカウントを管理者として登録しますか？</p>
-            <button onClick={handleRescueRegister}>管理者として登録</button>
+            <button onClick={() => handleRescueRegister()}>管理者として登録</button>
           </section>
         )}
       </main>
